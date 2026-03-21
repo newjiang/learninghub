@@ -4,11 +4,14 @@
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Function;
 
 /**
  * 更新README
@@ -48,20 +51,22 @@ public class UpdateReadMe {
         if (Objects.isNull(listFiles)) {
             return;
         }
+        Function<String, String> urlEncode = path -> URLEncoder.encode(path, StandardCharsets.UTF_8);
         for (File file : listFiles) {
             String fileName = file.getName();
             String parentPathString = parent == null ? "" : parent + "/";
+            String fileEncodePath = urlEncode.apply(parentPathString + fileName);
             if (file.isDirectory() && fileName.startsWith("chapter-")) {
                 builder.append("  ".repeat(level))
                         .append("* [").append(fileName).append("]")
-                        .append("(").append(parentPathString).append(fileName).append(")")
+                        .append("(").append(fileEncodePath).append(")")
                         .append(System.lineSeparator());
                 parseChapter(file, level + 1, parentPathString + fileName, builder);
             }
             if (file.isFile() && fileName.endsWith(".md") && !"README.md".equalsIgnoreCase(fileName)) {
                 builder.append("  ".repeat(level))
                         .append("* [").append(fileName).append("]")
-                        .append("(").append(parentPathString).append(fileName).append(")")
+                        .append("(").append(fileEncodePath).append(")")
                         .append(System.lineSeparator());
             }
         }
