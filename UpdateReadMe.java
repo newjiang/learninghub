@@ -51,11 +51,10 @@ public class UpdateReadMe {
         if (Objects.isNull(listFiles)) {
             return;
         }
-        Function<String, String> urlEncode = path -> URLEncoder.encode(path, StandardCharsets.UTF_8);
         for (File file : listFiles) {
             String fileName = file.getName();
             String parentPathString = parent == null ? "" : parent + "/";
-            String fileEncodePath = urlEncode.apply(parentPathString + fileName);
+            String fileEncodePath = (parentPathString + fileName).replace(" ", "%2F");
             if (file.isDirectory() && fileName.startsWith("chapter-")) {
                 builder.append("  ".repeat(level))
                         .append("* [").append(fileName).append("]")
