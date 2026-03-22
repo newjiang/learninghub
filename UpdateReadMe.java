@@ -54,7 +54,7 @@ public class UpdateReadMe {
         for (File file : listFiles) {
             String fileName = file.getName();
             String parentPathString = parent == null ? "" : parent + "/";
-            String fileEncodePath = (parentPathString + fileName).replace(" ", "%2F");
+            String fileEncodePath = (parentPathString + fileName).replace(" ", "%20");
             if (file.isDirectory() && fileName.startsWith("chapter-")) {
                 builder.append("  ".repeat(level))
                         .append("* [").append(fileName).append("]")
