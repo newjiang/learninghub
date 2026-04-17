@@ -18,7 +18,7 @@ java UpdateReadMe.java
       * [chapter_java_11_feature](chapter_01_编程语言/chapter_01_java/chapter_01_feature/chapter_java_11_feature)
       * [chapter_java_17_feature](chapter_01_编程语言/chapter_01_java/chapter_01_feature/chapter_java_17_feature)
       * [chapter_java_21_feature](chapter_01_编程语言/chapter_01_java/chapter_01_feature/chapter_java_21_feature)
-    * [chapter_01_jvm](chapter_01_编程语言/chapter_01_java/chapter_01_jvm)
+    * [chapter_01_jvm](chapter_01_编程语言/chapter_01_java/chapter_02_jvm)
     * [IO.md](chapter_01_编程语言/chapter_01_java/IO.md)
     * [JDBC.md](chapter_01_编程语言/chapter_01_java/JDBC.md)
     * [动态代理 Dynamic Proxy.md](chapter_01_编程语言/chapter_01_java/动态代理%20Dynamic%20Proxy.md)
