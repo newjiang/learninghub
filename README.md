@@ -44,6 +44,8 @@ java UpdateReadMe.java
   * [chapter_03_Netty](chapter_02_开发框架/chapter_03_Netty)
 * [chapter_03_中间件](chapter_03_中间件)
   * [chapter_01_Redis](chapter_03_中间件/chapter_01_Redis)
+    * [Redis原理.md](chapter_03_中间件/chapter_01_Redis/Redis原理.md)
+    * [Redis面试.md](chapter_03_中间件/chapter_01_Redis/Redis面试.md)
   * [chapter_02_Zookeeper](chapter_03_中间件/chapter_02_Zookeeper)
   * [chapter_03_SQL](chapter_03_中间件/chapter_03_SQL)
   * [chapter_04_ElasticSearch](chapter_03_中间件/chapter_04_ElasticSearch)
