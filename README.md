@@ -47,6 +47,8 @@ java UpdateReadMe.java
     * [Redis原理.md](chapter_03_中间件/chapter_01_Redis/Redis原理.md)
     * [Redis面试.md](chapter_03_中间件/chapter_01_Redis/Redis面试.md)
   * [chapter_02_Zookeeper](chapter_03_中间件/chapter_02_Zookeeper)
+    * [ZooKeeper原理.md](chapter_03_中间件/chapter_02_Zookeeper/ZooKeeper原理.md)
+    * [ZooKeeper面试.md](chapter_03_中间件/chapter_02_Zookeeper/ZooKeeper面试.md)
   * [chapter_03_SQL](chapter_03_中间件/chapter_03_SQL)
   * [chapter_04_ElasticSearch](chapter_03_中间件/chapter_04_ElasticSearch)
   * [chapter_05_Nginx](chapter_03_中间件/chapter_05_Nginx)
