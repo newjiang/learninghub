@@ -49,6 +49,8 @@ java UpdateReadMe.java
   * [chapter_04_ElasticSearch](chapter_03_中间件/chapter_04_ElasticSearch)
   * [chapter_05_Nginx](chapter_03_中间件/chapter_05_Nginx)
   * [chapter_06_MQ](chapter_03_中间件/chapter_06_MQ)
+    * [Kafka原理.md](chapter_03_中间件/chapter_06_MQ/Kafka原理.md)
+    * [Kafka面试.md](chapter_03_中间件/chapter_06_MQ/Kafka面试.md)
 * [chapter_04_基础设施](chapter_04_基础设施)
   * [chapter_01_Docker](chapter_04_基础设施/chapter_01_Docker)
   * [chapter_02_Kubernetes](chapter_04_基础设施/chapter_02_Kubernetes)
