@@ -50,6 +50,8 @@ java UpdateReadMe.java
     * [ZooKeeper原理.md](chapter_03_中间件/chapter_02_Zookeeper/ZooKeeper原理.md)
     * [ZooKeeper面试.md](chapter_03_中间件/chapter_02_Zookeeper/ZooKeeper面试.md)
   * [chapter_03_SQL](chapter_03_中间件/chapter_03_SQL)
+    * [MySQL原理.md](chapter_03_中间件/chapter_03_SQL/MySQL原理.md)
+    * [MySQL面试.md](chapter_03_中间件/chapter_03_SQL/MySQL面试.md)
   * [chapter_04_ElasticSearch](chapter_03_中间件/chapter_04_ElasticSearch)
   * [chapter_05_Nginx](chapter_03_中间件/chapter_05_Nginx)
   * [chapter_06_MQ](chapter_03_中间件/chapter_06_MQ)
