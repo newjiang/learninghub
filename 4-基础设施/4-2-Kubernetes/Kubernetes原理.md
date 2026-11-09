@@ -237,7 +237,7 @@ flowchart TD
 
 进程可能在付款已提交但响应未送达时退出；消息可能处理后未确认。平台负责停止和重建，业务仍需幂等键、结果查询和可恢复状态。强制删除更不能证明旧节点上的进程已经停止。
 
-Spring Boot 的就绪、探针与关闭机制可结合 [Boot 运行原理](../../chapter_02_开发框架/chapter_01_Spring/chapter_02_SpringBoot/SpringBoot原理.md#sb-07) 对照，明确平台与应用各自的职责。
+Spring Boot 的就绪、探针与关闭机制可结合 [Boot 运行原理](../../02/开发框架/chapter_01_Spring/chapter_02_SpringBoot/SpringBoot原理.md#sb-07) 对照，明确平台与应用各自的职责。
 
 <a id="k-06"></a>
 ## 6. 工作负载演进：为什么不能所有应用都用 Deployment

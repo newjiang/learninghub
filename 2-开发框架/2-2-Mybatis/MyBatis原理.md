@@ -533,7 +533,7 @@ sequenceDiagram
 
 常见本地集成使用 Spring 数据源事务管理能力，事务管理器与 SqlSessionFactory 应关联正确的 DataSource。Mapper 异常可经集成层翻译为 Spring 的数据访问异常，但翻译不等于自动补偿；回滚仍取决于外层事务代理、异常规则和资源参与情况。
 
-受管 SqlSession 不允许业务代码自行 commit/rollback/close。事务服务发生自调用、跨线程或使用另一工厂时，还要回到 [Spring 事务边界](../chapter_01_Spring/chapter_01_SpringFramework/Spring原理.md#sf-07) 分析，不能把问题都归到 MyBatis。[官方事务说明](https://mybatis.org/spring/transactions.html)
+受管 SqlSession 不允许业务代码自行 commit/rollback/close。事务服务发生自调用、跨线程或使用另一工厂时，还要回到 [Spring 事务边界](../2-1-Spring/chapter_01_SpringFramework/Spring原理.md#sf-07) 分析，不能把问题都归到 MyBatis。[官方事务说明](https://mybatis.org/spring/transactions.html)
 
 <a id="mb-13"></a>
 ## 13. 多数据源与读写分离：路由改变后，事务会跟着换吗
@@ -575,7 +575,7 @@ flowchart LR
 
 ### 13.4 跨库写入不自动原子化
 
-两个数据源分别成功一部分，本地事务注解不会凭空产生跨库原子性。需要重新定义业务状态与协调协议；可衔接 [Cloud 一致性章节](../chapter_01_Spring/chapter_03_SpringCloud/SpringCloud原理.md#sc-12)。异步路由上下文要显式传播并清理，不应复制数据库连接来共享事务。
+两个数据源分别成功一部分，本地事务注解不会凭空产生跨库原子性。需要重新定义业务状态与协调协议；可衔接 [Cloud 一致性章节](../2-1-Spring/chapter_03_SpringCloud/SpringCloud原理.md#sc-12)。异步路由上下文要显式传播并清理，不应复制数据库连接来共享事务。
 
 <a id="mb-14"></a>
 ## 14. 插件：拦截四类对象，为什么容易改错阶段

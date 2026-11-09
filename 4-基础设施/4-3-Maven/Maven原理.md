@@ -287,7 +287,7 @@ Maven 3 的常见规则中，当前模型显式管理的匹配条目可优先于
 
 ### 7.3 Spring Boot 的 parent、BOM 与 Starter
 
-Boot parent 通常提供依赖和构建约定；仅导入 Boot BOM 不继承 parent 的全部插件配置；Starter 是依赖入口。三者与自动配置还有不同职责，可对照 [Boot 依赖与打包原理](../../chapter_02_开发框架/chapter_01_Spring/chapter_02_SpringBoot/SpringBoot原理.md#sb-02)。
+Boot parent 通常提供依赖和构建约定；仅导入 Boot BOM 不继承 parent 的全部插件配置；Starter 是依赖入口。三者与自动配置还有不同职责，可对照 [Boot 依赖与打包原理](../../02/开发框架/chapter_01_Spring/chapter_02_SpringBoot/SpringBoot原理.md#sb-02)。
 
 项目 dependencyManagement 主要治理项目依赖，不统一覆盖插件自身依赖图。需要更换插件内部组件时，应按插件支持方式配置并验证，而不是认为 BOM 能管所有 ClassLoader。
 
