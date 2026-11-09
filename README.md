@@ -51,6 +51,8 @@ java UpdateReadMe.java
       * [SpringCloud面试.md](chapter_02_开发框架/chapter_01_Spring/chapter_03_SpringCloud/SpringCloud面试.md)
     * [Spring Bean 生命周期详解.md](chapter_02_开发框架/chapter_01_Spring/Spring%20Bean%20生命周期详解.md)
   * [chapter_02_Mybatis](chapter_02_开发框架/chapter_02_Mybatis)
+    * [MyBatis原理.md](chapter_02_开发框架/chapter_02_Mybatis/MyBatis原理.md)
+    * [MyBatis面试.md](chapter_02_开发框架/chapter_02_Mybatis/MyBatis面试.md)
   * [chapter_03_Netty](chapter_02_开发框架/chapter_03_Netty)
 * [chapter_03_中间件](chapter_03_中间件)
   * [chapter_01_Redis](chapter_03_中间件/chapter_01_Redis)
