@@ -1,5 +1,8 @@
 # Kubernetes基础概念
 
+> **历史实验资料**：原文保留，含 Kubernetes 1.20 时代及旧插件配置。系统学习请先读 [Kubernetes 原理](Kubernetes原理.md) 与 [Kubernetes 面试](Kubernetes面试.md)；版本迁移和旧材料对应关系见 [原理篇第 20 章](Kubernetes原理.md#k-20)。
+> 旧安装步骤、镜像、权限与入口实现不作为当前默认方案。
+
 # 1、是什么
 <img src="https://cdn.nlark.com/yuque/0/2021/png/1613913/1625452569657-833e64b2-1403-4fb6-9ee3-1e166504ccf0.png" width="1912" title="" crop="0,0,1,1" id="HI8nx" class="ne-image">
 

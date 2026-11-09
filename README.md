@@ -72,6 +72,8 @@ java UpdateReadMe.java
 * [chapter_04_基础设施](chapter_04_基础设施)
   * [chapter_01_Docker](chapter_04_基础设施/chapter_01_Docker)
   * [chapter_02_Kubernetes](chapter_04_基础设施/chapter_02_Kubernetes)
+    * [Kubernetes原理.md](chapter_04_基础设施/chapter_02_Kubernetes/Kubernetes原理.md)
+    * [Kubernetes面试.md](chapter_04_基础设施/chapter_02_Kubernetes/Kubernetes面试.md)
     * [尚硅谷_Kubernetes基础概念.md](chapter_04_基础设施/chapter_02_Kubernetes/尚硅谷_Kubernetes基础概念.md)
     * [尚硅谷_Kubernetes核心实战.md](chapter_04_基础设施/chapter_02_Kubernetes/尚硅谷_Kubernetes核心实战.md)
   * [chapter_03_Maven](chapter_04_基础设施/chapter_03_Maven)

@@ -1,4 +1,8 @@
 # 1、资源创建方式
+
+> **历史实验资料**：原文保留，含 Kubernetes 1.20 时代及旧插件配置。系统学习请先读 [Kubernetes 原理](Kubernetes原理.md) 与 [Kubernetes 面试](Kubernetes面试.md)；版本迁移和旧材料对应关系见 [原理篇第 20 章](Kubernetes原理.md#k-20)。
+> 旧安装步骤、镜像、权限与入口实现不作为当前默认方案。
+
 + 命令行
 + YAML
 
