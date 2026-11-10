@@ -4,7 +4,7 @@
 
 > **版本口径**：语言与接口契约优先；JDK（Java Development Kit，Java 开发工具包）8、17、21、25 是本文的对照节点，25 为本篇参考版本，并非“最新版本”声明。实现细节不自动成为跨版本保证。
 
-[返回 Java 知识体系导读](../README.md)
+[返回 Java 知识体系导读](../学习路线.md)
 
 ## 阅读路线
 
@@ -21,6 +21,7 @@
 | [9. 精确调用的最小验证](#p-09) | invokeExact 的返回类型也属于调用点描述，表达式上下文会影响匹配。 |
 | [10. 从反射扫描到调用计划：一次解析、明确验证、受控复用](#p-10) | 框架应缓存完整且不可变的调用计划，避免每次按名字猜方法，也避免把访问失败藏到业务调用时。 |
 | [11. 反射、句柄与字节码的连接：查找能力和调用形态](#p-11) | 反射负责通用发现，句柄组合表达调用图，字节码调用点承载适配与链接；三者不能靠固定性能排名替代分析。 |
+| [12. 反射 varargs、转换与虚分派：把查找和执行拆开验证](#p-12) | 逐步推导与反例验证 |
 
 <a id="p-01"></a>
 ## 1. 反射的作用与可选方案
@@ -269,6 +270,43 @@ flowchart LR
 闭世界编译与 AOT（Ahead-of-Time Compilation，提前编译）工具还可能要求登记可达动态入口。使用 MethodHandle 并不天然消除所有动态分析要求，具体工具仍需在目标产物验证。
 
 参考：[Lookup 与访问能力](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/invoke/MethodHandles.Lookup.html)、[MethodHandle](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/invoke/MethodHandle.html)。
+
+<a id="p-12"></a>
+## 12. 反射 varargs、转换与虚分派：把查找和执行拆开验证
+
+> 🎯 **核心问题**：getMethod 找到了方法，为何 invoke 仍可能参数不匹配？拿到父类 Method 是否一定调用父类实现？
+
+### 一、精确查找没有源码重载决议
+查找用名称及精确参数 Class，例如 int.class 与 Integer.class 不相同。Java 源码调用时的自动装箱和重载选择，不能全部搬到 getMethod 上。返回类型通常不是 getMethod 参数匹配的选择项，桥接导致的相关返回类型差异应结合声明规则理解。
+
+### 二、invoke 本身也是可变参数入口
+目标 `join(String... words)` 的运行期参数是一个 String[]。反射层又接收 Object...，因此调用者要把“一个数组参数”与“反射的参数数组”分开。
+
+```java
+public class InvokeArrayDemo {
+    public static String join(String... words) { return String.join("/", words); }
+    public static void main(String[] args) throws Exception {
+        var method = InvokeArrayDemo.class.getMethod("join", String[].class);
+        String[] words = {"a", "b"};
+        System.out.println(method.invoke(null, (Object) words)); // a/b
+    }
+}
+```
+
+这里 `(Object) words` 让反射参数列表只有一个元素，该元素是 String[]。若直接把数组误作 Object... 展开，反射可能看到多个 String 参数，而目标需要一个数组，于是参数数量不匹配。null 也应明确是“参数数组为 null”还是“一个参数值为 null”。
+
+### 三、允许转换不等于任意转换
+Method.invoke 对基本类型执行规定的拆箱与拓宽；Integer 可适配某些更宽基本类型，不代表 Long 可自动窄化为 int。字符串 "123" 转 int 需要框架转换器。返回基本类型会装箱，void 返回 null；这些都是调用适配，不会修复错误的方法定位。
+
+### 四、父类 Method 调用仍可尊重覆写
+对于普通虚方法，拿到父类声明的 Method，在子类实例上 invoke 仍可能执行子类覆写。反射表示“找到了哪个声明”与运行时虚分派选择“执行哪个实现”是不同问题。若需要显式父实现语义，要使用符合权限规则的特殊调用机制，而不是指望 getDeclaredMethod 禁用多态。
+
+### 五、异常栈应分三层看
+查找失败、参数/访问失败和目标业务异常是不同层。目标异常以 InvocationTargetException 表示，cause 才是业务原因。框架若同时还有代理包装，需逐层还原但保留基础设施上下文，不要把所有 cause 一律剥到最深然后丢掉失败位置。
+
+**验证矩阵**：基本类型与包装类型查找、拓宽与窄化、单数组参数、无参、单 null、父声明对子对象调用，以及目标业务主动抛错。覆盖这些比重复演示一个无参 public 方法更能检验调用器是否可靠。
+
+参考：[Method 调用契约](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/reflect/Method.html)。
 
 <a id="p-versions"></a>
 ## 版本演进与学习边界

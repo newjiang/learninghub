@@ -4,7 +4,13 @@
 
 > **版本口径**：语言与接口契约优先；JDK（Java Development Kit，Java 开发工具包）8、17、21、25 是本文的对照节点，25 为本篇参考版本，并非“最新版本”声明。实现细节不自动成为跨版本保证。
 
-[返回 Java 知识体系导读](../README.md)
+[返回 Java 知识体系导读](../学习路线.md)
+
+## AQS 专题阅读顺序
+
+[16：状态与职责](#p-16) → [17：独占获取](#p-17) → [18：释放、取消与共享传播](#p-18) → [19：Condition](#p-19) → [20：共享同步器实验与版本对照](#p-20)。
+
+已有[锁机制中的自定义独占同步器](../1-1-4-锁机制/锁机制原理.md#p-14)可与本篇共享示例对照：两个示例的 state、所有者和释放条件不同。
 
 ## 阅读路线
 
@@ -24,6 +30,12 @@
 | [12. 阻塞队列为何有不同争用结构](#p-12) | 相同 put/take 契约可以由不同锁与存储设计实现，并发度收益与维护成本互换。 |
 | [13. FutureTask 完成状态机：结果写入、取消和中断怎样竞争](#p-13) | 先争取完成权，再写结果并发布终态；结果取消与执行线程停止不在同一条状态线上。 |
 | [14. CompletableFuture 依赖节点传播：完成竞争与线程归属](#p-14) | 前驱完成触发依赖节点，节点再竞争后继结果；完成传播不是为每条箭头都创建线程。 |
+| [15. ThreadLocal 的探测与清理：弱键为什么不足以防泄漏](#p-15) | 逐步推导与反例验证 |
+| [16. AQS 全景：同步状态、等待队列与进度责任](#p-16) | 状态、时序与正确性推导 |
+| [17. AQS 独占获取逐步推导：入队、重检与阻塞握手](#p-17) | 状态、时序与正确性推导 |
+| [18. AQS 释放、取消与共享传播：让后继持续推进](#p-18) | 状态、时序与正确性推导 |
+| [19. Condition 从登记到重获：两种等待与两次竞争](#p-19) | 状态、时序与正确性推导 |
+| [20. 共享同步器实验与源码版本对照：从一次开门到安全发布](#p-20) | 状态、时序与正确性推导 |
 
 <a id="p-01"></a>
 ## 1. 工具地图与共同语义
@@ -347,6 +359,280 @@ flowchart TD
 
 参考：[CompletableFuture 指定版本源码](https://raw.githubusercontent.com/openjdk/jdk/jdk-25-ga/src/java.base/share/classes/java/util/concurrent/CompletableFuture.java)。
 
+<a id="p-15"></a>
+## 15. ThreadLocal 的探测与清理：弱键为什么不足以防泄漏
+
+> 🎯 **核心问题**：键是弱引用，为什么值还能留下？为什么一个请求的上下文会被另一个请求看到？
+
+### 一、对象图先于算法
+线程持有 ThreadLocalMap，条目对 ThreadLocal 键采用弱引用，但对 value 通常仍为强引用。ThreadLocal 不再有外部强引用后，键可以被回收成 null，线程到映射、条目到值的强引用链却仍存在。没有一条“键回收后立刻同步删除值”的通用实时保证。
+
+```mermaid
+flowchart LR
+    T[存活工作线程] --> M[ThreadLocalMap]
+    M --> E[Entry]
+    E -.弱引用，可能已清空.-> K[ThreadLocal 键]
+    E --> V[仍被强持有的业务值]
+    V --> L[请求对象或旧插件加载器]
+```
+
+**读图**：长期线程和大对象值组合会放大保留成本。反过来，若值又强引用键或相关加载域，对可达性的推理还要继续展开，不能只盯 weak 字样。
+
+### 二、开放寻址为什么让清理复杂
+参考实现不是普通 HashMap。哈希落点冲突时沿表寻找空位或匹配键，查找依赖连续探测链。遇到键已清空的陈旧槽，不能简单把该槽设为完全空然后停止，否则原本因冲突放在后面的活条目可能无法被原查找路径发现。
+
+清理需要维持探测链：移除陈旧值，处理后续条目并按需要重新定位；set、get、remove 等路径会触发不同范围的清理。实现细节及阈值按源码版本看，不应将其简化成“每次 get 都完整扫描所有槽”。
+
+### 三、键还活着也会发生上下文污染
+静态 ThreadLocal 键可以一直活着，这时甚至没有陈旧键问题。任务 A 设置 tenant=A 后忘记清理，池线程复用去执行 B，B 读取到 A。数据保留与跨请求污染是不同故障，不能以“键没有泄漏”证明上下文正确。
+
+### 四、为什么有时要恢复，有时要 remove
+最外层、明确拥有值的作用域可在 finally.remove。嵌套作用域则需要保存进入前状态，退出时恢复，否则内层会删除外层仍需要的上下文。CallerRuns 让任务可能在提交线程运行，更不能无条件清掉该线程原本合法上下文。
+
+```text
+捕获允许传播的上下文快照
+进入执行线程时保存原有状态
+安装本次状态
+try 执行任务
+finally 恢复进入前状态；原来不存在时移除
+```
+
+这个模型仍需区分“没绑定”和“绑定了 null”，并避免把不应传播的安全信息传到异步任务。InheritableThreadLocal 在线程创建时继承，不是在每次提交时复制；其值的默认继承也未必是深复制。
+
+### 五、替代设计怎样选择
+显式参数把依赖写清楚，但增加传递；ThreadLocal 适合既有同步调用链，却要求清理；ScopedValue 提供有作用域的绑定模型，但不是任意可变线程变量的无条件替代。选择前先确定谁拥有上下文、能否变化、是否跨线程以及何时结束。
+
+参考：[OpenJDK 25 ThreadLocal](https://raw.githubusercontent.com/openjdk/jdk/jdk-25-ga/src/java.base/share/classes/java/lang/ThreadLocal.java)。
+
+<a id="p-16"></a>
+## 16. AQS 全景：同步状态、等待队列与进度责任
+
+> 🎯 **核心结论**：AQS（AbstractQueuedSynchronizer，抽象队列同步器）是同步器实现框架，不是一把锁，也不是独立调度线程的线程池。
+
+### 16.1 为什么只用原子变量还不够
+争用小时，CAS（Compare-And-Set，比较并设置）失败后重试可以很便宜；若持有者执行时间长，所有等待者不断重试会消耗处理器与缓存带宽。加入阻塞又引入“谁先登记、谁负责通知、取消者怎样退出、通知早到会不会丢”等协议。AQS 的价值是复用这些复杂路径，子类只定义短小的状态尝试逻辑。
+
+| 层次 | 内容 | 不能混淆的边界 |
+|---|---|---|
+| state | 一个具有相应内存语义的 int | 可表示重入计数、许可、剩余事件，不总是 0/1 |
+| owner | 独占持有者记录 | 不替代 state 的互斥与发布；共享模式通常不按线程所有权释放 |
+| 同步队列 | 获取资格失败后的等待者 | 排队不等于已获锁，不自动保证公平 |
+| Condition 队列 | 等待业务谓词变化 | 被 signal 后还需参与锁竞争 |
+| 子类钩子 | 获取、释放及持有规则 | 必须自行正确维护状态、不变量与错误检查 |
+
+```mermaid
+flowchart TD
+    API[锁或同步器公共方法] --> H[子类尝试获取 / 释放]
+    H --> S[state 原子更新与发布]
+    H -->|获取失败| Q[AQS 入队、重试、阻塞、取消]
+    Q --> H
+    S -->|释放允许推进| W[唤醒后继重新尝试]
+    W --> Q
+```
+
+**读图**：子类不是“先拿 AQS 的锁再改 state”。子类自己利用 state 构造同步协议，AQS 再围绕其成功/失败结果组织进度。
+
+### 16.2 五个钩子的精确责任
+tryAcquire 返回独占获取是否成功；tryRelease 返回是否已完全释放，足以推进后继。tryAcquireShared 返回负数表示失败，零表示成功但按该次获取结果没有供后续共享获取的余量，正数表示成功且后续共享获取可能成功；它不是必须返回“真实剩余许可证精确值”。tryReleaseShared 表示此次释放是否可能允许等待者推进。isHeldExclusively 用于独占归属判断，尤其关联 Condition 的合法性。
+
+钩子默认可抛 UnsupportedOperationException，子类只实现需要的模式；不能因为继承 AQS 就自动支持全部独占、共享与条件能力。不要在钩子中进行网络访问、长等待或不受控回调，重试和阻塞由外层协议组织。
+
+### 16.3 同步队列为何有 head 哨兵
+典型队列由 head 哨兵、等待节点和 tail 组成。head 表达已推进到的队列边界，不简单等于“此刻持锁线程”。获得资格的排队节点可被提升为新的 head，并清理等待线程和旧链接；真正互斥依据仍是 state 和子类规则。
+
+队列有 CLH（Craig, Landin and Hagersten）队列思想来源，但 AQS 使用显式链接、阻塞唤醒与取消处理，不能照搬经典自旋 CLH 的每个细节。现代版本节点类型与状态位已有变化。
+
+### 16.4 正确性证明要分两件事
+**安全性**：不能同时出现两个独占持有者，不能释放未持有资格，不能让未达到条件的线程通过。**进展性**：状态已允许时等待者有机会继续，取消者不永久挡住后继，唤醒竞争不会丢掉必要推进。
+
+一个实现只通过“最终计数正确”的测试，未必证明取消和唤醒能进展；只看到线程被 unpark，也未必证明它不会越过业务谓词。后续章节分别沿两条线解释。
+
+参考：[AQS 接口契约](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/concurrent/locks/AbstractQueuedSynchronizer.html)。
+
+<a id="p-17"></a>
+## 17. AQS 独占获取逐步推导：入队、重检与阻塞握手
+
+> 🎯 **核心结论**：入队保证线程有可追踪的等待位置，重检与等待状态协调释放竞争；park 只是协议中的一步。
+
+### 17.1 从三个线程开始
+T1 已持有独占资格；T2、T3 尝试失败。队列延迟初始化后，T2、T3 竞争连接到尾部。成功更新 tail 是登记进展的重要步骤，但前后链接发布可能不在同一瞬间完成，清理和观察必须容忍短暂不完整状态。
+
+```mermaid
+flowchart LR
+    H[head 哨兵] --> N2[T2 等待节点] --> N3[T3 等待节点]
+    N3 -.prev.-> N2
+    N2 -.prev.-> H
+    O[T1 持有者] --> S[state 已占用]
+```
+
+**读图**：T1 不必作为一个正在等待的节点出现在图中。不要用“持锁线程一定在队首”替代 state 与队列的真实关系。
+
+### 17.2 简化控制流与每步必要性
+```text
+先尝试获取；成功则返回
+失败后准备节点并加入同步队列
+循环：
+  处理前驱取消或链接未稳定的状态
+  若具备队列前端资格，则再次尝试获取
+  成功：推进 head，清理旧链接与等待线程引用，返回
+  按实现协议登记等待状态并重新检查
+  仍不能推进时 park
+  返回后检查中断、期限与状态，再循环
+```
+
+这是跨版本机制伪代码，不是 JDK 25 acquire 的逐行抄写。参考实现还包含有限自旋、共享分支与资源失败处理。理解顺序后再对照方法，避免把 JDK 8 的 shouldParkAfterFailedAcquire 硬套成所有版本入口。
+
+### 17.3 最危险的窗口：检查失败后，真正睡眠前
+错误实现是“检查 state 不可用；持有者释放并发现无人等待；等待者随后 park”，它可能永远缺少后续通知。正确实现要用等待登记、再检查及释放侧观察协议封住窗口。若 unpark 先于 park 到来，LockSupport 的许可还能让随后 park 不永久睡下，但许可至多一个，不保存无限通知历史。
+
+因此不能只说“先 unpark 后 park 没关系，所以其余检查都多余”。许可解决一个特定顺序问题，节点是否已可被释放者找到、哪个线程该被唤醒、取消后如何跳过仍由同步器协议保证。
+
+### 17.4 唤醒后为何可能再次失败
+T1 释放并唤醒 T2，非公平入口的新线程 T4 可以先取得资格；T2 调度稍晚，重试失败后继续等待。唤醒不是把锁对象塞给 T2，业务代码不能在 park 返回后直接执行临界区。
+
+公平策略通常在子类尝试获取时考虑排队前驱，AQS FIFO 队列本身不禁止插队。重入、无参 tryLock 等入口还可能有不同约束。公平也不保证操作系统立即调度被选中的线程。
+
+### 17.5 无锁队列操作与持锁业务不是同一保证
+入队局部可用 CAS，并不使整把独占锁成为无锁算法；临界区若被暂停，依赖它的其他线程仍不能推进。同步器使用原子指令是实现手段，算法的进度性质要看完整协议。
+
+参考：[OpenJDK 25 acquire 与队列方法](https://raw.githubusercontent.com/openjdk/jdk/jdk-25-ga/src/java.base/share/classes/java/util/concurrent/locks/AbstractQueuedSynchronizer.java)。
+
+<a id="p-18"></a>
+## 18. AQS 释放、取消与共享传播：让后继持续推进
+
+> 🎯 **核心结论**：释放要发布业务状态，取消要退出等待关系，共享传播要让仍满足条件的后继继续尝试，三者不能互相替代。
+
+### 18.1 独占释放不总是完全释放
+可重入锁由持有深度 3 释放到 2，仍有独占者；此时不能把结果解释为资源已空闲。降为 0 后按协议清理 owner、发布 state，再由 AQS 安排后继推进。子类 tryRelease 返回是否完全释放，框架据此判断通知。
+
+对临界区数据的可见性依赖释放与后续成功获取的同步关系。unpark 负责调度进展，不能把“调用了 unpark”单独当作所有业务字段已正确发布的证明。
+
+### 18.2 中间节点取消如何影响其他人
+```mermaid
+flowchart LR
+    H[head] --> A[T2 已取消] --> B[T3 仍有效]
+    H -.清理后连接有效后继.-> B
+```
+
+**读图**：取消不是让 T2 在自己的栈上抛异常就结束。它还需不再挡住 T3，解除不必要的线程引用，并处理释放者恰好观察到旧链接的竞争。实际 cleanQueue、状态清理及补充通知顺序按版本看，不能先断任意链接再期待其他线程自动修复。
+
+可中断获取检测到中断后退出并报告；不可中断 acquire 则可能记录中断、继续等待，成功后恢复标记。所谓不可中断不是“清除中断且假装没发生”，也不表示线程不可能收到 interrupt。
+
+定时获取使用截止期限与剩余时间；每次唤醒重新给完整 timeout，会把有限等待变成可能无限延期。取消与获取同时发生还需要定义谁已取得资格，清理必须按实际状态防止误释放。
+
+### 18.3 共享传播不是广播所有人直接通过
+CountDownLatch 计数从 1 到 0 后，所有等待者都可满足条件；Semaphore 只新增一个许可时，通常只能让相应数量的请求成功。两者都用共享模式，传播结果却由子类状态决定。
+
+参考 JDK 25 的共享获取成功路径会考虑通知后续共享节点，释放共享状态也可启动推进。它并非把 state 改成“共享”后全体无条件进入。读写锁的队列可能混合独占与共享请求，还要遵守其防饥饿与顺序策略。
+
+### 18.4 大许可请求的队首阻塞
+一个公平信号量只有 2 个许可，队首请求 3 个，后方请求 1 个。严格尊重等待次序会使后方即使“本来装得下”也等待，产生队首阻塞。非公平策略可能改善利用率，但大请求又可能长期被小请求消耗许可而饥饿。选型要说明公平、吞吐和请求大小分布，不能只说公平更好。
+
+### 18.5 应观察什么
+queueLength 是估计值，适合诊断趋势，不适合先读队长再决定业务准入。调试应记录 state 语义、持有者、等待原因、取消数量和业务进展。线程都在 WAITING 不必然死锁，可能是在正确等待尚未发生的事件；状态已允许却无人推进才是另一类协议故障。
+
+参考：[AQS](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/concurrent/locks/AbstractQueuedSynchronizer.html)、[Semaphore](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/concurrent/Semaphore.html)。
+
+<a id="p-19"></a>
+## 19. Condition 从登记到重获：两种等待与两次竞争
+
+> 🎯 **核心结论**：Condition 等待的是业务谓词，重获同步器等待的是执行资格；signal 只推动转移，返回前还要恢复独占状态。
+
+### 19.1 一次完整 await
+线程持锁检查 ready 为 false；创建条件等待节点、登记到 Condition 链；保存完整同步状态；释放全部对应独占持有；等待 signal、中断或期限；转到可重获同步资格的路径；重新获得之前保存的状态；最后按结果返回或报告中断。
+
+```mermaid
+sequenceDiagram
+    participant W as 等待者
+    participant C as 条件队列
+    participant S as 同步队列与锁
+    participant N as 通知者
+    W->>C: 持锁登记等待节点
+    W->>S: 保存并完全释放锁状态
+    N->>S: 获取锁，改变谓词
+    N->>C: signal 选择可转移等待者
+    C->>S: 节点参与获取同步资格
+    N->>S: 释放锁
+    S-->>W: 重新获取并恢复持有深度
+    W->>W: while 再检查谓词
+```
+
+**读图**：释放的只是该 Condition 关联的独占锁；若线程还持有另一把业务锁，它不会被自动释放，仍可能造成跨锁死锁。重入两次后 await 需要完整释放并恢复相应深度，不是机械只 unlock 一次。
+
+### 19.2 为什么登记必须与持锁检查结合
+如果先判断 ready=false，再放开锁，然后才登记条件节点，通知者可能在中间将 ready=true 并 signal，发现没有等待者而离开。等待者再入睡就可能永远等不到下一次通知。
+
+正确流程在同一锁下检查与登记，通知者也须持同一把锁修改谓词并 signal，避免这个业务窗口。底层还需解决登记释放后通知早于实际 park 的竞争；这是队列状态和许可协议的职责。
+
+### 19.3 通知和取消争夺哪种资格
+现代参考实现通过条件状态及原子操作协调节点是否仍属于条件等待。signal 抢到转移资格则推进同步队列；中断或超时也可能先改变条件状态，走取消清理与重获路径。不能让同一个节点被重复登记成两个独立请求，也不能让取消者把后继永久留在错误队列。
+
+先中断、通知先赢以及重获期间中断，可能导致不同的异常/标记处理。对常规 await，底层协议一般会在最终按规则抛错前重获锁，便于调用者仍按持锁状态执行 finally；方法入口已被中断等特殊前置路径另按契约处理。
+
+### 19.4 返回 true 不证明业务条件属于自己
+即使某个定时等待入口认为收到通知，等待者重获锁前，另一消费者可能先领取数据。while 必须检查业务谓词，而不是 if 检查“我是否被通知”。signalAll 也只扩大竞争者集合，不直接让所有人跳过谓词。
+
+多个 Condition 可分别表达 notEmpty、notFull，减少唤醒错误人群。但关闭队列时，既可能有生产者等空位，也可能有消费者等元素；关闭状态必须进入双方谓词并通知相应等待群体，否则只通知一边会留下永远睡眠的请求。
+
+### 19.5 Condition 的适用前提
+子类必须能判断独占持有、完全释放已保存状态、随后重新获取并恢复。共享信号量不能直接照抄 new ConditionObject 就声称有合法等待语义；它没有普通独占锁的同一套所有者与重入深度协议。
+
+参考：[AQS ConditionObject](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/concurrent/locks/AbstractQueuedSynchronizer.ConditionObject.html)、[指定版本条件转移源码](https://raw.githubusercontent.com/openjdk/jdk/jdk-25-ga/src/java.base/share/classes/java/util/concurrent/locks/AbstractQueuedSynchronizer.java)。
+
+<a id="p-20"></a>
+## 20. 共享同步器实验与源码版本对照：从一次开门到安全发布
+
+> 🎯 **核心结论**：能明确说明 state 的含义与合法转换，才有资格谈如何复用 AQS。下面的一次性门闩用共享模式连接事件发布与所有等待者。
+
+### 20.1 完整代码与接口范围
+```java
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.AbstractQueuedSynchronizer;
+public final class OneShotGate {
+    private final Sync sync = new Sync();
+    private static final class Sync extends AbstractQueuedSynchronizer {
+        protected int tryAcquireShared(int ignored) {
+            return getState() == 1 ? 1 : -1;
+        }
+        protected boolean tryReleaseShared(int ignored) {
+            return compareAndSetState(0, 1);
+        }
+    }
+    public void await() throws InterruptedException {
+        sync.acquireSharedInterruptibly(1);
+    }
+    public boolean await(long timeout, TimeUnit unit) throws InterruptedException {
+        return sync.tryAcquireSharedNanos(1, unit.toNanos(timeout));
+    }
+    public void open() { sync.releaseShared(1); }
+}
+```
+
+state=0 关闭，state=1 永久打开。首次 open 成功转换并触发推进，重复 open 不需要重复改变状态。等待者读取 1 即可通过，共享成功返回正值允许相应传播。该类不支持重置，不收集每个任务的失败，不替代完整事件系统。
+
+### 20.2 发布保证的准确范围
+假设线程 A 构造数据后首次成功 open，等待者通过相应状态获取后读取该数据，这条状态发布链为先前写入提供依据。若门早已由另一个线程打开，A 再修改数据并调用重复 open，**不能依赖一次失败 CAS 自动构造新的发布事件**；门已开不等于所有后续写入都不断被同步广播。
+
+若需要每轮更新，应引入阶段号、计数或新的同步器实例，并规定参与者如何登记。简单把 state 从 1 改回 0 会与已经通过或尚未返回的等待者交错，旧轮次通知可能进入新轮次，产生代际混淆。
+
+### 20.3 JDK 8 与 25 不能拼接阅读
+| 维度 | JDK 8 常见资料 | OpenJDK 25 参考 |
+|---|---|---|
+| 节点状态 | waitStatus，SIGNAL/CONDITION/PROPAGATE 等 | status 位及 WAITING/COND/CANCELLED 等 |
+| 等待协调 | 常围绕前驱状态与旧辅助方法讲解 | 统一 acquire 流程、节点类型及新清理路径 |
+| 共享传播 | 旧 setHeadAndPropagate 等路径 | 共享节点成功后的 signalNextIfShared 等路径 |
+| 条件转移 | 旧状态转换和转移函数 | ConditionNode、条件位协调及重获路径 |
+| 不变主线 | 状态语义、排队、检查、取消与发布 | 同样需要，但具体实现不能逐字段套用 |
+
+CLH（Craig, Landin and Hagersten）是算法来源名称，不表示两个版本的节点字段布局必须相同。不要在一段伪代码中同时使用旧 SIGNAL 常量和新 WAITING 位，再宣称是现代源码。
+
+### 20.4 怎样设计有判别力的测试
+验证关闭状态定时等待失败；多个等待者在首次 open 后全部可返回；取消的等待者退出而不挡住其他人；打开后的新等待者无需等待；首次打开前发布的数据可读。利用闩锁和 Future 控制顺序，避免 sleep 作为正确性条件。
+
+性能实验另行比较低竞争快速路径、高竞争等待、频繁取消和不同等待规模。API 行为测试不能证明某次机器汇编布局，微基准也不能替代同步协议证明。
+
+参考：[OpenJDK 8 AQS](https://raw.githubusercontent.com/openjdk/jdk8u/master/jdk/src/share/classes/java/util/concurrent/locks/AbstractQueuedSynchronizer.java)、[OpenJDK 25 AQS](https://raw.githubusercontent.com/openjdk/jdk/jdk-25-ga/src/java.base/share/classes/java/util/concurrent/locks/AbstractQueuedSynchronizer.java)。
+
 <a id="p-versions"></a>
 ## 版本演进与学习边界
 
@@ -384,3 +670,5 @@ flowchart TD
 | ABA | A→B→A | 同值往返问题 |
 | Scoped Value | Scoped Value | 作用域值 |
 | Phaser | Phaser | 多阶段同步器 |
+| AQS | AbstractQueuedSynchronizer | 抽象队列同步器 |
+| CLH | Craig, Landin and Hagersten | 同步队列算法来源名称 |
